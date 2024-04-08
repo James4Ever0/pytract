@@ -1,6 +1,6 @@
 # pytract
 
-EVM compatible smart contract language, in Python
+EVM compatible smart contract language, in Python.
 
 Different from Vyper, this library can be used in Python projects and you can directly write your smart contract in Python classes, instantiate it with address and use it across Python code.
 
