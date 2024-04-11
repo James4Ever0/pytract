@@ -1,9 +1,0 @@
-{# template code for generating contract apis #}
-import brownie
-
-project = brownie.project.load('{{}}')
-
-{% for contract in contract_list %}
-class {{contract.name}}:
-    def __init__(self):
-        self._contract_container = project.

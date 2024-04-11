@@ -2,7 +2,8 @@ from setuptools import setup
 
 PKG_NAME = "pytract"
 REQUIREMENTS = [
-    # "vyper", 
+    # "vyper",
+    "jinja2",
     "eth-brownie",
 ]
 

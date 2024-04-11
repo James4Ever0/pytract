@@ -1,0 +1,70 @@
+{# template code for generating contract apis #}
+{# remember to use black formatter after code has been generated.#}
+
+from brownie.network.account import Account
+from brownie.network.contract import ProjectContract
+from pytract import abi2api
+from typing import Optional
+
+project_info = abi2api.load_project_and_get_project_info('{{project_path}}')
+
+{% for contract_name, contract_info in project_info.contracts_info.items() %}
+class {{contract_name}}(abi2api.ContractInstance):
+    _project = project_info.project
+    _contract_info = project_info.contract_info["{{contract_name}}"]
+
+    def __init__(self, deployed_contract: ProjectContract, issuer:Optional[Account]=None): # to create you need to either deploy or load contract by address
+        super().__init__(deployed_contract, issuer)
+
+    @classmethod
+    def deploy(cls, issuer:Account, {{", ".join([param.name for param in contract_info.deploy_abi.inputs])}}, **kwargs):
+        """
+        Inputs:
+
+            issuer: Account
+        {% if contract_info.deploy_abi.inputs != [] %}
+            {% for parameter in function_info.inputs %}
+            {{parameter.name}} :{{parameter.type}}
+            {% endfor %}
+        {% endif %}
+            **kwargs: Dict[str, Any]
+        
+        Output:
+        
+            contract: {{contract_name}}
+        """
+        args = [{{", ".join([param.name for param in contract_info.deploy_abi.inputs])}}]
+        parameters = abi2api.ContractDeployParameters(issuer=issuer, kwargs = kwargs)
+        deployed_contract: ProjectContract = cls._contract_info.contract_container.deploy(*parameters.to_args())
+        return cls(deployed_contract)
+    {% for function_info in contract_info.function_info_list %}
+
+    def {{function_info.name}}(self, {{", ".join([param.name for param in function_info.inputs])}}):
+        """
+        Inputs:
+
+        {% if function_info.inputs != [] %}
+            {% for parameter in function_info.inputs %}
+            {{parameter.name}} :{{parameter.type}}
+            {% endfor %}
+        {% else %}
+            (No parameters)
+        {% endif %}
+
+        Outputs:
+
+        {% if function_info.outputs != [] %}
+            {% for parameter in function_info.outputs %}
+            {{parameter.name}} :{{parameter.type}}
+            {% endfor %}
+        {% else %}
+            (No parameters)
+        {% endif %}
+        """
+        # call the underlying contract.
+        {{", ".join([param.name for param in function_info.outputs])}} = self.contract.{{function_info.name}}()
+        return {{", ".join([param.name for param in function_info.outputs])}} 
+    {% endfor %}
+    
+
+{% endfor %}
