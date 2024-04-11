@@ -1,10 +1,9 @@
 # pytract
 
-EVM compatible smart contract language, in Python.
+Smart contract Python API generator.
 
-Different from Vyper, this library can be used in Python projects and you can directly write your smart contract in Python classes, instantiate it with address and use it across Python code.
+It works by interpreting smart contract ABI and generate corresponding Python API code.
 
 ## Roadmap
 
-- [ ] Create a binding to smart contract and APIs
-- [ ] Develop a minimal EVM emulation platform, without history
+- [ ] Create a binding to smart contract and APIs for Brownie
