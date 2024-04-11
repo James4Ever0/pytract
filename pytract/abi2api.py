@@ -12,37 +12,43 @@ from utils import *
 
 # can you pay to a contract? or is it always payable?
 
-
-class TransactionParameters(pydantic.BaseModel):
+class TransactionMandatoryParameters(pydantic.BaseModel):
     issuer: Account
     """The Account that the transaction it sent from. If not given, the transaction is sent from the account that deployed the contract."""
+class TransactionOptionalParameters(pydantic.BaseModel):
 
-    gas_limit: ...
+    gas_limit: Optional[int]=None
     """The amount of gas provided for transaction execution, in wei. If not given, the gas limit is determined using web3.eth.estimate_gas."""
 
-    gas_buffer: ...
+    gas_buffer: Optional[int]=None
     """A multiplier applied to web3.eth.estimate_gas when setting gas limit automatically. gas_limit and gas_buffer cannot be given at the same time."""
 
-    gas_price: ...
+    gas_price: Optional[int]=None
     """The gas price for legacy transaction, in wei. If not given, the gas price is set according to web3.eth.gas_price."""
 
-    max_fee: ...
+    max_fee: Optional[int]=None
     """Max fee per gas of dynamic fee transaction."""
 
-    priority_fee: ...
+    priority_fee: Optional[int]=None
     """Max priority fee per gas of dynamic fee transaction."""
 
-    amount: ...
+    amount: Optional[int]=None
     """The amount of Ether to include with the transaction, in wei."""
 
-    nonce: ...
+    nonce: Optional[int]= None
     """The nonce for the transaction. If not given, the nonce is set according to web3.eth.get_transaction_count while taking pending transactions from the sender into account."""
 
-    required_confs: ...
+    required_confs: Optional[int] = None # positive
     """The required confirmations before the TransactionReceipt is processed. If none is given, defaults to 1 confirmation. If 0 is given, immediately returns a pending TransactionReceipt, while waiting for a confirmation in a separate thread."""
 
-    allow_revert: ...
+    allow_revert: Optional[bool]=None
     """Boolean indicating whether the transaction should be broadcasted when it is expected to revert. If not set, the default behaviour is to allow reverting transactions in development and disallow them in a live environment."""
+
+class TransactionParameters(TransactionMandatoryParameters, TransactionOptionalParameters):
+
+    def serialize(self):
+        return {k:v for k,v in self.dict().items() if v is not None}
+
 
 
 class ContractProperties(pydantic.BaseModel):
