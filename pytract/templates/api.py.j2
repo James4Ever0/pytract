@@ -6,7 +6,7 @@ from brownie.network.contract import ProjectContract
 from pytract import abi2api
 from typing import Optional
 
-project_info = abi2api.load_project_and_get_project_info('{{project_path}}')
+project_info = abi2api.load_project_info_for_api()
 
 {% for contract_name, contract_info in project_info.contracts_info.items() %}
 class {{contract_name}}(abi2api.ContractInstance):
@@ -17,28 +17,30 @@ class {{contract_name}}(abi2api.ContractInstance):
         super().__init__(deployed_contract, issuer)
 
     @classmethod
-    def deploy(cls, issuer:Account, {{", ".join([param.name for param in contract_info.deploy_abi.inputs])}}, **kwargs):
+    def deploy(cls, transaction_parameters: abi2api.TransactionParameters, {{", ".join([param.name for param in contract_info.deploy_abi.inputs])}}):
         """
         Inputs:
 
-            issuer: Account
+            transaction_parameters: TransactionParameters
         {% if contract_info.deploy_abi.inputs != [] %}
             {% for parameter in function_info.inputs %}
             {{parameter.name}} :{{parameter.type}}
             {% endfor %}
         {% endif %}
-            **kwargs: Dict[str, Any]
         
         Output:
         
             contract: {{contract_name}}
         """
         args = [{{", ".join([param.name for param in contract_info.deploy_abi.inputs])}}]
-        parameters = abi2api.ContractDeployParameters(issuer=issuer, kwargs = kwargs)
-        deployed_contract: ProjectContract = cls._contract_info.contract_container.deploy(*parameters.to_args())
-        return cls(deployed_contract)
-    {% for function_info in contract_info.function_info_list %}
 
+        parameters = transaction_parameters.to_contract_deploy_parameters()
+
+        deployed_contract: ProjectContract = cls._contract_info.contract_container.deploy(*parameters.to_args())
+
+        return cls(deployed_contract, transaction_parameters.to_contract_deploy_parameters.issuer)
+    
+    {% for function_info in contract_info.function_info_list %}
     def {{function_info.name}}(self, {{", ".join([param.name for param in function_info.inputs])}}):
         """
         Inputs:
@@ -62,9 +64,10 @@ class {{contract_name}}(abi2api.ContractInstance):
         {% endif %}
         """
         # call the underlying contract.
-        {{", ".join([param.name for param in function_info.outputs])}} = self.contract.{{function_info.name}}()
-        return {{", ".join([param.name for param in function_info.outputs])}} 
+        {{", ".join([param.name for param in function_info.outputs])}} = self.contract.{{function_info.name}}(
+        {{", ".join([param.name for param in function_info.inputs])}})
+        return {{", ".join([param.name for param in function_info.outputs])}}
+
     {% endfor %}
     
-
 {% endfor %}

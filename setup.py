@@ -1,11 +1,13 @@
 from setuptools import setup
 
 PKG_NAME = "pytract"
-REQUIREMENTS = [
-    # "vyper",
-    "jinja2",
-    "eth-brownie",
-]
+# REQUIREMENTS = [
+#     # "vyper",
+#     "jinja2",
+#     "eth-brownie",
+#     "pydantic",
+#     "beartype",
+# ]
 
 setup(
     name=PKG_NAME,
@@ -15,5 +17,11 @@ setup(
     url=f"https://github.com/james4ever0/{PKG_NAME}",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    install_requires=REQUIREMENTS,
+    # install_requires=REQUIREMENTS,
+    install_requires = open('requirements.txt').read().splitlines(),
+    entry_points={
+        'console_scripts': [
+            'pytract = pytract.__main__:main',
+        ],
+    },
 )

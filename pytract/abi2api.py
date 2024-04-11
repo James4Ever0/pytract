@@ -9,46 +9,69 @@ import pydantic
 from typing import Dict, List, Optional, cast
 from constants import *
 from utils import *
+import inspect
+import functools
+import jinja2
+from pathlib import Path
 
 # can you pay to a contract? or is it always payable?
+
+_TEMPLATE_DIR = Path(os.path.dirname(__file__))
+_API_TEMPLATE_PATH = _TEMPLATE_DIR / "api.py.j2"
+
 
 class TransactionMandatoryParameters(pydantic.BaseModel):
     issuer: Account
     """The Account that the transaction it sent from. If not given, the transaction is sent from the account that deployed the contract."""
+
+
 class TransactionOptionalParameters(pydantic.BaseModel):
 
-    gas_limit: Optional[int]=None
+    gas_limit: Optional[int] = None
     """The amount of gas provided for transaction execution, in wei. If not given, the gas limit is determined using web3.eth.estimate_gas."""
 
-    gas_buffer: Optional[int]=None
+    gas_buffer: Optional[int] = None
     """A multiplier applied to web3.eth.estimate_gas when setting gas limit automatically. gas_limit and gas_buffer cannot be given at the same time."""
 
-    gas_price: Optional[int]=None
+    gas_price: Optional[int] = None
     """The gas price for legacy transaction, in wei. If not given, the gas price is set according to web3.eth.gas_price."""
 
-    max_fee: Optional[int]=None
+    max_fee: Optional[int] = None
     """Max fee per gas of dynamic fee transaction."""
 
-    priority_fee: Optional[int]=None
+    priority_fee: Optional[int] = None
     """Max priority fee per gas of dynamic fee transaction."""
 
-    amount: Optional[int]=None
+    amount: Optional[int] = None
     """The amount of Ether to include with the transaction, in wei."""
 
-    nonce: Optional[int]= None
+    nonce: Optional[int] = None
     """The nonce for the transaction. If not given, the nonce is set according to web3.eth.get_transaction_count while taking pending transactions from the sender into account."""
 
-    required_confs: Optional[int] = None # positive
+    required_confs: Optional[int] = None  # positive
     """The required confirmations before the TransactionReceipt is processed. If none is given, defaults to 1 confirmation. If 0 is given, immediately returns a pending TransactionReceipt, while waiting for a confirmation in a separate thread."""
 
-    allow_revert: Optional[bool]=None
+    allow_revert: Optional[bool] = None
     """Boolean indicating whether the transaction should be broadcasted when it is expected to revert. If not set, the default behaviour is to allow reverting transactions in development and disallow them in a live environment."""
 
-class TransactionParameters(TransactionMandatoryParameters, TransactionOptionalParameters):
 
-    def serialize(self):
-        return {k:v for k,v in self.dict().items() if v is not None}
+class TransactionParameters(
+    TransactionMandatoryParameters, TransactionOptionalParameters
+):
 
+    @property
+    def kwargs(self):
+        return {k: v for k, v in self.dict().items() if v is not None}
+
+    @property
+    def optional_kwargs(self):
+        return {k: v for k, v in self.kwargs.items() if k != "issuer"}
+
+    def to_contract_deploy_parameters(self):
+        parameters = ContractDeployParameters(
+            issuer=self.issuer, kwargs=self.optional_kwargs
+        )
+        return parameters
 
 
 class ContractProperties(pydantic.BaseModel):
@@ -165,6 +188,19 @@ def parse_abi_list(abi_list: List[dict]) -> List[ContractABI]:
 # def load_project_and_generate_api_code(project_path: str):
 
 
+def load_project_info_for_api():
+    """Load the project info for the API script inside any brownie project folder."""
+    caller_source_path = inspect.stack()[1].filename
+
+    script_abspath = os.path.abspath(caller_source_path)
+    project_path = functools.reduce(
+        lambda x, _: os.path.dirname(x), range(2), script_abspath
+    )
+
+    project_info = load_project_and_get_project_info(project_path)
+    return project_info
+
+
 def load_project_and_get_project_info(project_path: str):
     # generate api code for every possible contract
     # for every contract one can load, deploy and call meth  # this is the constructor abi, which can be used for getting all allowed parameters.od
@@ -203,6 +239,22 @@ def load_project_and_get_project_info(project_path: str):
     project_info = ProjectInfo(project=_project, contracts_info=contracts_info)
     return project_info
 
-    # # write to '<project_path>/api'
-    # api_code_directory_path = os.path.join(project_path, API_RELATIVE_DIR)
-    # ensure_dir(api_code_directory_path)
+
+def generate_api_code_for_project(project_path: str):
+
+    # write to '<project_path>/api'
+    project_info = load_project_and_get_project_info(project_path)
+
+    api_code_directory_path = os.path.join(project_path, API_RELATIVE_DIR)
+    ensure_dir(api_code_directory_path)
+
+    with open(os.path.join(api_code_directory_path, "api.py"), "w+") as f:
+        template = jinja2.Template(open(_API_TEMPLATE_PATH).read())
+        content = template.render(project_info=project_info)
+        f.write(content)
+
+    with open(os.path.join(api_code_directory_path, "__init__.py"), "w+") as f:
+        content = """from .api import *"""
+        f.write(content)
+
+    Path(os.path.join(project_path, "__init__.py")).touch()
