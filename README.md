@@ -37,6 +37,8 @@ print(dir(project_info)) # list project info attributes
 
 Note the difference of using it with `brownie` alone, you now have a fully portable python package, which you can write static typed code without the need for copying and pasting from `brownie console`.
 
+You can view all generated API code under folder `<your brownie project>/api`.
+
 Example generated contract API class is given below:
 
 ```python
