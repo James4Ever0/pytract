@@ -1,5 +1,7 @@
 # pytract
 
+[![PyPI download month](https://img.shields.io/pypi/dm/pytract.svg)](https://pypi.python.org/pypi/pytract/)
+
 Smart contract Python API generator.
 
 It works by interpreting smart contract ABI and generate corresponding Python API code.
@@ -111,9 +113,13 @@ class Faucet(abi2api.ContractInstance):
 
         return cls(deployed_contract, _txparams.issuer, _txparams)
 
-
 ```
 
 ## Roadmap
 
 - [x] Create a binding to smart contract and APIs for Brownie
+- [ ] Create a simple pure Python transaction and smart contract platform without blockchain
+
+## Stargazers
+
+[![Stargazers over time](https://starchart.cc/James4Ever0/pytract.svg)](https://starchart.cc/James4Ever0/pytract)
