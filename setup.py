@@ -11,10 +11,12 @@ PKG_NAME = "pytract"
 
 setup(
     name=PKG_NAME,
-    version="0.0.1",
+    version="0.0.2",
     packages=[PKG_NAME],
     description="Smart contract Python API generator.",
     url=f"https://github.com/james4ever0/{PKG_NAME}",
+    package_data={PKG_NAME: ['templates/*.j2']},
+    include_package_data=True,
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     # install_requires=REQUIREMENTS,

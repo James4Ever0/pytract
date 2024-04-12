@@ -6,7 +6,17 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate API code for a given project"
     )
-    parser.add_argument("process", nargs=1, help="Project path to process", type=str)
+
+    # Create subparsers for different keywords
+    subparsers = parser.add_subparsers(dest='keyword', title='Keywords', metavar='<keyword>')
+
+    # Subparser for the 'set' keyword
+    set_parser = subparsers.add_parser('process', help='Process a given project')
+    set_parser.add_argument('project_path', type=str, help='Path of the project to process')
+
     arguments = parser.parse_args()
-    project_path = arguments.process[0]
-    generate_api_code_for_project(project_path)
+    if arguments.keyword == 'process':
+        project_path = arguments.project_path
+        generate_api_code_for_project(project_path)
+    else:
+        raise Exception(f"Invalid keyword argument: '{arguments.keyword}'")

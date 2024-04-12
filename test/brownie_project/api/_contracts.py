@@ -1,45 +1,10 @@
-# pytract
+from brownie.network.account import Account
+from brownie.network.contract import Contract, ProjectContract
+from pytract import abi2api
+from typing import Optional, Union
+from ._project import project_info
 
-Smart contract Python API generator.
 
-It works by interpreting smart contract ABI and generate corresponding Python API code.
-
-## Usage
-
-Install from PyPI:
-
-```bash
-pip install pytract
-```
-
-Create Python API code for your `brownie` project:
-
-```bash
-usage: pytract process [-h] project_path
-
-positional arguments:
-  project_path  Path of the project to process
-
-optional arguments:
-  -h, --help    show this help message and exit
-```
-
-And you shall import all available contracts and programmatically.
-
-If your project folder name is `brownie_project` then write:
-
-```python
-from brownie_project.api import project_info, contracts
-
-print(dir(contracts)) # list available contract classes
-print(dir(project_info)) # list project info attributes
-```
-
-Note the difference of using it with `brownie` alone, you now have a fully portable python package, which you can write static typed code without the need for copying and pasting from `brownie console`.
-
-Example generated contract API class is given below:
-
-```python
 class Faucet(abi2api.ContractInstance):
     _project = project_info.project
     _contract_info = project_info.contracts_info["Faucet"]
@@ -110,8 +75,4 @@ class Faucet(abi2api.ContractInstance):
         return cls(deployed_contract, _txparams.issuer, _txparams)
 
 
-```
-
-## Roadmap
-
-- [x] Create a binding to smart contract and APIs for Brownie
+__all__ = ["Faucet"]

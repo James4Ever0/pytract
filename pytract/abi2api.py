@@ -2,25 +2,34 @@ from brownie import project
 from brownie.network.contract import (
     ContractContainer,
     ProjectContract,
+    Contract,
 )  # , InterfaceConstructor
 from brownie.project.main import Project
 from brownie.network.account import Account
 import pydantic
-from typing import Dict, List, Optional, cast
-from constants import *
-from utils import *
+from typing import Dict, List, Optional, cast, Union
+from .constants import *
+from .utils import *
 import inspect
 import functools
 import jinja2
 from pathlib import Path
+import abc
+import black
+import black.mode
 
 # can you pay to a contract? or is it always payable?
 
-_TEMPLATE_DIR = Path(os.path.dirname(__file__))
+_TEMPLATE_DIR = Path(os.path.dirname(__file__)) / "templates"
 _API_TEMPLATE_PATH = _TEMPLATE_DIR / "api.py.j2"
 
 
-class TransactionMandatoryParameters(pydantic.BaseModel):
+class BaseConfig(pydantic.BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
+
+class TransactionMandatoryParameters(BaseConfig):
     issuer: Account
     """The Account that the transaction it sent from. If not given, the transaction is sent from the account that deployed the contract."""
 
@@ -67,19 +76,47 @@ class TransactionParameters(
     def optional_kwargs(self):
         return {k: v for k, v in self.kwargs.items() if k != "issuer"}
 
-    def to_contract_deploy_parameters(self):
+    def to_contract_deploy_parameters(self, args: list = []):
         parameters = ContractDeployParameters(
-            issuer=self.issuer, kwargs=self.optional_kwargs
+            issuer=self.issuer, args=args, kwargs=self.optional_kwargs
         )
         return parameters
 
 
-class ContractProperties(pydantic.BaseModel):
-    @classmethod
-    def from_deployed(
-        cls, deployed_contract: ProjectContract, issuer: Optional[Account] = None
+class FallbackException(Exception): ...
+
+
+class FunctionBase:
+    def __init__(
+        self,
+        contract: Union[Contract, ProjectContract],
+        txparams: Optional[TransactionParameters],
     ):
-        return cls()
+        self._contract = contract
+        """Smart contract instance with callable functions."""
+        self._txparams = txparams
+        """Default transation parameters to use in function calls, if not given."""
+
+    def txparams_with_fallback(
+        self, txparams: Optional[TransactionParameters]
+    ) -> TransactionParameters:
+        if txparams is not None:
+            return txparams
+        elif self._txparams is not None:
+            return self._txparams
+        else:
+            raise FallbackException(
+                "Both given txparams and default txparams are empty."
+            )
+
+
+class ContractProperties(BaseConfig):
+    contract: Union[Contract, ProjectContract]
+    issuer: Account
+
+    @classmethod
+    def from_contract(cls, contract: Union[ProjectContract, Contract], issuer: Account):
+        return cls(contract=contract, issuer=issuer)
 
 
 class ParamType(pydantic.BaseModel):
@@ -100,40 +137,61 @@ class FunctionInfo(pydantic.BaseModel):
     inputs: List[ParamType] = []
     outputs: List[ParamType] = []
     name: str
+    stateMutability: Optional[str] = None
 
 
-class ContractInfo(pydantic.BaseModel):
+class ContractInfo(BaseConfig):
     contract_container: ContractContainer
     abi_list: List[ContractABI]
     deploy_abi: ContractABI
     function_info_list: List[FunctionInfo] = []
 
 
-class ContractInstance:
+# TODO: resolve external contract abi and generate api code for them
+
+
+class ContractInstance(abc.ABC):
+    """
+    Abstract contract instance class. You should never instantiate it directly.
+    """
+
     _project: Project
     _contract_info: ContractInfo
+    _contract_name: str
 
     def __init__(
-        self, deployed_contract: ProjectContract, issuer: Optional[Account] = None
+        self,
+        contract: Union[ProjectContract, Contract],
+        issuer: Optional[Account] = None,
     ):  # to create you need to either deploy or load contract by address
-        self._deployed_contract = deployed_contract
-        self.properties = ContractProperties.from_deployed(
-            deployed_contract=self._deployed_contract, issuer=issuer
+        self._contract = contract
+        if issuer is None:
+            issuer = cast(Account, contract.tx.sender)
+        self.properties = ContractProperties.from_contract(
+            contract=self._contract, issuer=issuer
         )
 
+    @classmethod
+    def from_address(cls, address: str):
+        contract = Contract.from_abi(
+            cls._contract_name, address, cls._contract_info.contract_container.abi
+        )
+        ret = cls(contract=contract)
+        return ret
 
-class ProjectInfo(pydantic.BaseModel):
+
+class ProjectInfo(BaseConfig):
     project: Project
     contracts_info: Dict[str, ContractInfo]
 
 
-class ContractDeployParameters(pydantic.BaseModel):
+class ContractDeployParameters(BaseConfig):
     issuer: Account  # can you validate that in pydantic? otherwise just use normal class instead, or beartype it.
     args: List = []
     kwargs: Dict = {}
 
     @pydantic.validator("kwargs")
-    def validate_kwargs(self, kwargs: dict):
+    def validate_kwargs(cls, kwargs: dict):
         ret = {}
         for k, v in kwargs.items():
             if k == CONTRACT_DEPLOYER_KEY:
@@ -165,7 +223,10 @@ def parse_function_info(abi: ContractABI) -> Optional[FunctionInfo]:
     # usually function is of our interest.
     if abi.type == FUNCTION_TYPE:
         return FunctionInfo(
-            inputs=abi.inputs, outputs=abi.outputs, name=cast(str, abi.name)
+            inputs=abi.inputs,
+            outputs=abi.outputs,
+            name=cast(str, abi.name),
+            stateMutability=abi.stateMutability,
         )
 
 
@@ -240,6 +301,18 @@ def load_project_and_get_project_info(project_path: str):
     return project_info
 
 
+def get_names_from_list(obj):
+    return [param.name for param in obj]
+
+
+def get_types_from_list(obj):
+    return [param.type for param in obj]
+
+
+def check_function_type_not_pure(function_type):
+    return function_type not in ["view", "pure"]
+
+
 def generate_api_code_for_project(project_path: str):
 
     # write to '<project_path>/api'
@@ -248,13 +321,39 @@ def generate_api_code_for_project(project_path: str):
     api_code_directory_path = os.path.join(project_path, API_RELATIVE_DIR)
     ensure_dir(api_code_directory_path)
 
-    with open(os.path.join(api_code_directory_path, "api.py"), "w+") as f:
-        template = jinja2.Template(open(_API_TEMPLATE_PATH).read())
+    with open(os.path.join(api_code_directory_path, "_contracts.py"), "w+") as f:
+        template = jinja2.Template(
+            open(_API_TEMPLATE_PATH).read(),
+            trim_blocks=True,
+            lstrip_blocks=True,
+            undefined=jinja2.StrictUndefined,
+        )
+        template.globals.update(
+            dict(
+                get_names_from_list=get_names_from_list,
+                get_types_from_list=get_types_from_list,
+                check_function_type_not_pure=check_function_type_not_pure,
+                list=list,
+            )
+        )
         content = template.render(project_info=project_info)
+        content = black.format_str(content, mode=black.mode.Mode())
+        f.write(content)
+
+    with open(os.path.join(api_code_directory_path, "contracts.py"), "w+") as f:
+        content = """from ._contracts import *"""
         f.write(content)
 
     with open(os.path.join(api_code_directory_path, "__init__.py"), "w+") as f:
-        content = """from .api import *"""
+        content = """from . import contracts
+from ._project import project_info"""
         f.write(content)
 
-    Path(os.path.join(project_path, "__init__.py")).touch()
+    with open(os.path.join(api_code_directory_path, "_project.py"), "w+") as f:
+        content = """from pytract import abi2api
+project_info = abi2api.load_project_info_for_api()"""
+        f.write(content)
+
+    with open(os.path.join(project_path, "__init__.py"), "w+") as f:
+        content = """from . import api"""
+        f.write(content)

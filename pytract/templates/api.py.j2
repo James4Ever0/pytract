@@ -1,73 +1,80 @@
 {# template code for generating contract apis #}
-{# remember to use black formatter after code has been generated.#}
-
+{# remember to use black formatter after code has been generated. #}
 from brownie.network.account import Account
-from brownie.network.contract import ProjectContract
+from brownie.network.contract import Contract, ProjectContract
 from pytract import abi2api
-from typing import Optional
-
-project_info = abi2api.load_project_info_for_api()
+from typing import Optional, Union
+from ._project import project_info
 
 {% for contract_name, contract_info in project_info.contracts_info.items() %}
 class {{contract_name}}(abi2api.ContractInstance):
     _project = project_info.project
-    _contract_info = project_info.contract_info["{{contract_name}}"]
+    _contract_info = project_info.contracts_info["{{contract_name}}"]
+    _contract_name = "{{contract_name}}"
 
-    def __init__(self, deployed_contract: ProjectContract, issuer:Optional[Account]=None): # to create you need to either deploy or load contract by address
-        super().__init__(deployed_contract, issuer)
+    class Function(abi2api.FunctionBase):
+        {% for function_info in contract_info.function_info_list %}
+        {% set function_type = function_info.stateMutability %}
+        {% set not_pure = check_function_type_not_pure(function_type) %}
+        {# is it pure, nonpayable or payable? #}
+        def {{function_info.name}}(self, {{", ".join(get_names_from_list(function_info.inputs))}}{{', _txparams: Optional[abi2api.TransactionParameters]=None' if not_pure else ''}}):
+            """
+            Function Type: {{function_type}}
+
+            Inputs:
+            {% if function_info.inputs != [] %}
+                {% for parameter in function_info.inputs %}
+                {{parameter.name}}: {{parameter.type}}
+                {% endfor %}
+            {% else %}
+                (No parameters)
+            {% endif %}
+
+            Outputs:
+            {% if function_info.outputs != [] %}
+                ({{ ", ".join(get_types_from_list(function_info.outputs)) }})
+            {% else %}
+                (No parameters)
+            {% endif %}
+            """
+            {# # call the underlying contract. #}
+            values = self._contract.{{function_info.name}}(
+            {{", ".join(get_names_from_list(function_info.inputs))}} {{', self.txparams_with_fallback(_txparams).dict()' if not_pure else ''}})
+            return values
+
+        {% endfor %}
+    
+
+    def __init__(self, contract: Union[Contract, ProjectContract], issuer:Optional[Account]=None, _txparams:Optional[abi2api.TransactionParameters] = None): # to create you need to either deploy or load contract by address
+        super().__init__(contract, issuer)
+        self.function = self.Function(contract, _txparams)
+        """
+        Available functions of this smart contract.
+        """
 
     @classmethod
-    def deploy(cls, transaction_parameters: abi2api.TransactionParameters, {{", ".join([param.name for param in contract_info.deploy_abi.inputs])}}):
+    def deploy(cls, {{", ".join(get_names_from_list(contract_info.deploy_abi.inputs)+["_txparams: abi2api.TransactionParameters"])}}):
         """
         Inputs:
-
             transaction_parameters: TransactionParameters
         {% if contract_info.deploy_abi.inputs != [] %}
             {% for parameter in function_info.inputs %}
-            {{parameter.name}} :{{parameter.type}}
+            {{parameter.name}}: {{parameter.type}}
             {% endfor %}
         {% endif %}
         
         Output:
-        
             contract: {{contract_name}}
         """
-        args = [{{", ".join([param.name for param in contract_info.deploy_abi.inputs])}}]
+        args = [{{", ".join(get_names_from_list(contract_info.deploy_abi.inputs))}}]
 
-        parameters = transaction_parameters.to_contract_deploy_parameters()
+        parameters = _txparams.to_contract_deploy_parameters(args)
 
-        deployed_contract: ProjectContract = cls._contract_info.contract_container.deploy(*parameters.to_args())
+        deployed_contract: ProjectContract = cls._contract_info.contract_container.deploy( *parameters.to_args()) # type: ignore
 
-        return cls(deployed_contract, transaction_parameters.to_contract_deploy_parameters.issuer)
-    
-    {% for function_info in contract_info.function_info_list %}
-    def {{function_info.name}}(self, {{", ".join([param.name for param in function_info.inputs])}}):
-        """
-        Inputs:
-
-        {% if function_info.inputs != [] %}
-            {% for parameter in function_info.inputs %}
-            {{parameter.name}} :{{parameter.type}}
-            {% endfor %}
-        {% else %}
-            (No parameters)
-        {% endif %}
-
-        Outputs:
-
-        {% if function_info.outputs != [] %}
-            {% for parameter in function_info.outputs %}
-            {{parameter.name}} :{{parameter.type}}
-            {% endfor %}
-        {% else %}
-            (No parameters)
-        {% endif %}
-        """
-        # call the underlying contract.
-        {{", ".join([param.name for param in function_info.outputs])}} = self.contract.{{function_info.name}}(
-        {{", ".join([param.name for param in function_info.inputs])}})
-        return {{", ".join([param.name for param in function_info.outputs])}}
-
-    {% endfor %}
+        return cls(deployed_contract, _txparams.issuer, _txparams)
     
 {% endfor %}
+
+
+__all__ = {{list(project_info.contracts_info.keys())}}
