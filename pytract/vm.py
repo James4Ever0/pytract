@@ -306,12 +306,16 @@ class Account:
         finally:
             self._disengage()
 
-
 class PersistantDataDict(dict):
     def __init__(self, contract: "SmartContract", data: dict = {}):
         self.contract = contract
         super().__init__(**data)
-
+    @contextmanager
+    def persist_context(self):
+        try:
+            yield self
+        finally:
+            self.persist()
     def __setitem__(self, key, value): # TODO: to handle nested statement like a[0][0] = 0, we need to use a contextmanager approach instead of this.
         super().__setitem__(key, value)
         self.persist()
@@ -339,7 +343,7 @@ class PersistantDataDict(dict):
 # https://docs.python.org/3/library/shelve.html
 # https://docs.python.org/3/library/dbm.html
 # https://github.com/dagnelies/pysos
-# https://github.com/balena/python-pqueue
+# https://github.com/balena/python-pqueue (persistent queue)
 # https://github.com/croqaz/Stones (with credits)
 class SmartContract:  # anything done to a smart contract shall be stored.
     def __init__(
@@ -358,9 +362,8 @@ class SmartContract:  # anything done to a smart contract shall be stored.
         self._default_account = None
         self.store()
 
-    @property
-    def data(self):
-        return self._data
+    def data_context(self):
+        return self._data.context()
 
     def _engage(self, account: Account):
         if self._default_account is not None:
