@@ -362,8 +362,9 @@ class SmartContract:  # anything done to a smart contract shall be stored.
         self._default_account = None
         self.store()
 
-    def data_context(self):
-        return self._data.context()
+    @property
+    def data(self):
+        return self._data
 
     def _engage(self, account: Account):
         if self._default_account is not None:
