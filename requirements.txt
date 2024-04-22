@@ -3,3 +3,5 @@ eth-brownie
 pydantic
 beartype
 tinydb
+filelock
+dill
