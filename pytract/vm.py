@@ -179,7 +179,7 @@ class VM:
     def get_contract_db_and_lock_filepaths(self, contract: "SmartContract"):
 
         address = contract._address
-        contract_db_filepath = self._contract_data_db_dir / f"{address}.dill"
+        contract_db_filepath = self._contract_data_db_dir / f"{address}.json"
         contract_lock_filepath = self._contract_data_lock_dir / f".{address}.lock"
         return contract_db_filepath, contract_lock_filepath
 
@@ -190,9 +190,10 @@ class VM:
         )
         if os.path.exists(contract_db_filepath):
             with filelock.FileLock(contract_lock_filepath):
-                with open(contract_db_filepath, "rb") as f:
-                    loaded_contract = typing.cast(SmartContract, dill.loads(f.read()))
-                    return loaded_contract
+                with open(contract_db_filepath, "r") as f:
+                    # loaded_contract = typing.cast(SmartContract, dill.loads(f.read()))
+                    data = typing.cast(dict, json.loads(f.read()))
+                    return data
 
     def persist_contract_data(self, contract: "SmartContract"):
         """Update data of smart contract"""
@@ -204,7 +205,7 @@ class VM:
         with filelock.FileLock(contract_lock_filepath):
             data = contract.serialize()
             # you may need filelock.
-            with open(contract_db_filepath, "wb+") as f:
+            with open(contract_db_filepath, "w+") as f:
                 f.write(data)
 
     def create_account(self, init_balance: float = 0):
@@ -306,6 +307,40 @@ class Account:
             self._disengage()
 
 
+class PersistantDataDict(dict):
+    def __init__(self, contract: "SmartContract", data: dict = {}):
+        self.contract = contract
+        super().__init__(**data)
+
+    def __setitem__(self, key, value): # TODO: to handle nested statement like a[0][0] = 0, we need to use a contextmanager approach instead of this.
+        super().__setitem__(key, value)
+        self.persist()
+    
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self.persist()
+    
+    def persist(self):
+        self.contract.store()
+
+    # def __setattr__(self, name, value):
+    #     self.contract.store()
+    #     super().__setattr__(name, value)
+
+    # def __getattribute__(self, name):
+    #     self.contract.store()
+    #     super().__getattribute__(name)
+
+    # def __delattr__(self, name):
+    #     self.contract.store()
+    #     super().__delattr__(name)
+
+# ref:
+# https://docs.python.org/3/library/shelve.html
+# https://docs.python.org/3/library/dbm.html
+# https://github.com/dagnelies/pysos
+# https://github.com/balena/python-pqueue
+# https://github.com/croqaz/Stones (with credits)
 class SmartContract:  # anything done to a smart contract shall be stored.
     def __init__(
         self, address, issuer: Optional[Account] = None, vm: Optional[VM] = None
@@ -314,13 +349,18 @@ class SmartContract:  # anything done to a smart contract shall be stored.
         self._address = address
         self._issuer = issuer
         self._vm = get_vm_with_fallback(vm)
-        loaded_contract = self._vm.load_contract_data(self)
-        if loaded_contract is None:
-            # if contract not found at address, then create new one.
-            self._serialized_data_history = 0
-            # self._account = Account(vm, issuer)
-            self._default_account = None
-            self.store()
+        data = self._vm.load_contract_data(self)
+        self._data = PersistantDataDict(self, data if data is not None else {})
+
+        # if contract not found at address, then create new one.
+        self._serialized_data_history_hash = self._data_hash
+        # self._account = Account(vm, issuer)
+        self._default_account = None
+        self.store()
+
+    @property
+    def data(self):
+        return self._data
 
     def _engage(self, account: Account):
         if self._default_account is not None:
@@ -340,28 +380,21 @@ class SmartContract:  # anything done to a smart contract shall be stored.
             self._disengage()
 
     def serialize(self):
-        return dill.dumps(self)
-        # return self._data.json()
+        # return dill.dumps(self)
+        return json.dumps(self.data, ensure_ascii=False)
 
     def persist_contract_data(self):
         # submit to vm
         self._vm.persist_contract_data(self)
 
-    def __setattr__(self, name, value):
-        self.store()
-        super().__setattr__(name, value)
-
-    def __getattribute__(self, name):
-        self.store()
-        super().__getattribute__(name)
-
-    def __delattr__(self, name):
-        self.store()
-        super().__delattr__(name)
+    @property
+    def _data_hash(self):
+        serialized_data = self.serialize()
+        serialized_data_hash = hashlib.sha256(serialized_data.encode()).hexdigest()
+        return serialized_data_hash
 
     def store(self):
-        serialized_data = self.serialize()
-        serialized_data_hash = hashlib.sha256(serialized_data).hexdigest()
+        serialized_data_hash = self._data_hash
         if serialized_data_hash != self._serialized_data_history_hash:
             self.persist_contract_data()
             self._serialized_data_history_hash = serialized_data_hash

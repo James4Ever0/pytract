@@ -120,6 +120,18 @@ class Faucet(abi2api.ContractInstance):
 - [x] Create a binding to smart contract and APIs for Brownie
 - [ ] Create a simple pure Python transaction and smart contract platform without blockchain
 
+## Related projects
+
+- [simular](https://pypi.org/project/simular-evm/)
+- [pyrevm](https://pypi.org/project/pyrevm/)
+- [pyevm](https://github.com/ethereum/py-evm)
+- [viem](https://viem.sh)
+- [hardhat](https://hardhat.org/)
+- [titanoboa](https://titanoboa.readthedocs.io/en/latest/index.html)
+- [TypeChain](https://github.com/dethcrypto/TypeChain)
+- [eth-sdk](https://github.com/dethcrypto/eth-sdk)
+- [ethereum-abi-types-generator](https://github.com/joshstevens19/ethereum-abi-types-generator)
+
 ## Stargazers
 
 [![Stargazers over time](https://starchart.cc/James4Ever0/pytract.svg)](https://starchart.cc/James4Ever0/pytract)
