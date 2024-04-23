@@ -1,0 +1,12 @@
+{
+  "source": "Memory",
+  "block_num": 0,
+  "accounts": {
+    "0x04dca00d0a8a6dcb7cb8ba43219b46603d66e96f": {
+      "nonce": 0,
+      "balance": "0x1",
+      "code": "0x",
+      "storage": {}
+    }
+  }
+}
