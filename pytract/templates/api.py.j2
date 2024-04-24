@@ -24,7 +24,7 @@ class {{contract_name}}(abi2api.ContractInstance):
             Inputs:
             {% if function_info.inputs != [] %}
                 {% for parameter in function_info.inputs %}
-                {{parameter.name}}: {{parameter.type}}
+                {{parameter.name}}: {{parameter.type_hint}}
                 {% endfor %}
             {% else %}
                 (No parameters)
@@ -59,7 +59,7 @@ class {{contract_name}}(abi2api.ContractInstance):
             transaction_parameters: TransactionParameters
         {% if contract_info.deploy_abi.inputs != [] %}
             {% for parameter in function_info.inputs %}
-            {{parameter.name}}: {{parameter.type}}
+            {{parameter.name}}: {{parameter.type_hint}}
             {% endfor %}
         {% endif %}
         

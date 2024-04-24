@@ -1,0 +1,66 @@
+[
+    {
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "getPersonDetails",
+        "inputs": [
+            {
+                "name": "person",
+                "type": "tuple",
+                "components": [
+                    {
+                        "name": "person",
+                        "type": "tuple",
+                        "components": [
+                            {
+                                "name": "name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "age",
+                                "type": "uint256"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "string"
+            }
+        ]
+    },
+    {
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "createPerson",
+        "inputs": [
+            {
+                "name": "name",
+                "type": "string"
+            },
+            {
+                "name": "age",
+                "type": "uint256"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "tuple",
+                "components": [
+                    {
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "name": "age",
+                        "type": "uint256"
+                    }
+                ]
+            }
+        ]
+    }
+]

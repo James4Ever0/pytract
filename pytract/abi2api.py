@@ -119,10 +119,26 @@ class ContractProperties(BaseConfig):
         return cls(contract=contract, issuer=issuer)
 
 
+# TODO: recursively resolve and create tuple type hints for languages like vyper
 class ParamType(pydantic.BaseModel):
     type: str
-    name: str
-    internalType: str
+    name: str = "" # mostly ignored
+    components: list["ParamType"] = []
+
+    # internalType: str
+    @property
+    def type_hint(self):
+        return self.resolve_type_hint(self)
+
+    @staticmethod
+    def resolve_type_hint(obj: "ParamType"):
+        if obj.components == []:
+            return obj.type
+        else:
+            it_type_hints = []
+            for it in obj.components:
+                it_type_hints.append(ParamType.resolve_type_hint(it))
+            return f"{obj.type}({', '.join(it_type_hints)})"
 
 
 class ContractABI(pydantic.BaseModel):
@@ -306,7 +322,7 @@ def get_names_from_list(obj):
 
 
 def get_types_from_list(obj):
-    return [param.type for param in obj]
+    return [param.type_hint for param in obj]
 
 
 def check_function_type_not_pure(function_type):
