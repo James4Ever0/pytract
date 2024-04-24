@@ -4,4 +4,4 @@ pydantic
 beartype
 tinydb
 filelock
-dill
+# dill

@@ -14,7 +14,7 @@ import filelock
 import functools
 import json
 import hashlib
-import dill
+# import dill
 import typing
 
 
@@ -374,6 +374,7 @@ class SmartContract:  # anything done to a smart contract shall be stored.
 
     def _disengage(self):
         self._default_account = None
+        self.persist_contract_data()
 
     @contextmanager
     def engage(self, account: Account):
