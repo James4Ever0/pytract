@@ -1,6 +1,7 @@
 from setuptools import setup
 
 PKG_NAME = "pytract"
+VERSION = "0.0.3"
 
 # REQUIREMENTS = [
 #     # "vyper",
@@ -12,7 +13,7 @@ PKG_NAME = "pytract"
 
 setup(
     name=PKG_NAME,
-    version="0.0.2",
+    version=VERSION,
     packages=[PKG_NAME],
     description="Smart contract Python API generator.",
     url=f"https://github.com/james4ever0/{PKG_NAME}",
