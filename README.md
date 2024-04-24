@@ -119,6 +119,7 @@ class Faucet(abi2api.ContractInstance):
 
 - [x] Create a binding to smart contract and APIs for Brownie
 - [ ] Create a simple pure Python transaction and smart contract platform without blockchain
+- [ ] Create a [TypeChain](https://npmjs.com/package/typechain)-like commandline tool for generating standalone package from a list of contract ABI files
 
 ## Related projects
 
