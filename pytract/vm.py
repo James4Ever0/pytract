@@ -27,11 +27,13 @@ import filelock
 import functools
 import json
 import hashlib
+import typing_extensions
 
 # import dill
 import typing
 
 Number = Union[int, float]
+P = typing_extensions.ParamSpec("P")
 
 
 # TODO: use tinydb context with filelock to ensure data consistency
@@ -269,6 +271,23 @@ class VM:
 # vm.create_contract()
 # account = vm.create_account()
 
+def payable(
+    func: typing.Callable[typing_extensions.Concatenate["typing.Any", P]]
+) -> typing.Callable[
+    typing_extensions.Concatenate["typing.Any", "Account", Number, P]
+]:
+    def payable_func(
+        self: "SmartContract",
+        caller: Account,
+        amount: Number,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ):
+        with self.engage(caller):
+            with self.receive(amount):
+                return func(self, *args, **kwargs)
+
+    return payable_func
 
 @beartype.beartype
 class Account:
@@ -326,13 +345,24 @@ class Account:
 class PersistantDataDict(dict):
     def __init__(self, contract: "SmartContract", data: dict = {}):
         self.contract = contract
-        self.ISSUER_KEY = "_issuer"
-        self.read_only_keys = [self.ISSUER_KEY]
+        self.ISSUER = "_issuer"
+        self.ACCOUNT = "_account"
+        self.ACCOUNT_KEY = "_account_key"
+        self.read_only_keys = [self.ISSUER, self.ACCOUNT, self.ACCOUNT_KEY]
         super().__init__(**data)
 
     def init_issuer(self, issuer: Account):
         with self.persist_context() as data_context:
-            data_context[data_context.ISSUER_KEY] = issuer._address
+            data_context[data_context.ISSUER] = issuer._address
+
+    def init_account(self, account: Account):
+        with self.persist_context() as data_context:
+            data_context[data_context.ACCOUNT] = account._address
+            data_context[data_context.ACCOUNT_KEY] = account._key
+
+    def init_issuer_and_account(self, issuer: Account, account: Account):
+        self.init_issuer(issuer)
+        self.init_account(account)
 
     @contextmanager
     def persist_context(self):
@@ -383,28 +413,47 @@ class PersistantDataDict(dict):
 # https://github.com/croqaz/Stones (with credits)
 class SmartContract:  # anything done to a smart contract shall be stored.
     def __init__(
-        self, address, issuer: Optional[Account] = None, vm: Optional[VM] = None
+        self,
+        account: Account,
+        vm: VM,
+        issuer: Optional[Account] = None,
     ):
         # if contract found at address, just load it from dill.
-        self._address = address
+        # self._address = address
+        self._account = account
         self._issuer = issuer
-        self._vm = get_vm_with_fallback(vm)
+        self._vm = vm
+        self._address = account._address
+        self._transfer_amount = 0
+        self._serialized_data_history_hash = ""
 
         self.load_data_and_register_issuer()
 
+        if self._issuer is None:
+            self._issuer = Account(self.data[self.data.ISSUER], vm=self._vm)
+
+        if self._account._key is None:
+            self._account.unlock(self.data[self.data.ACCOUNT_KEY])
+
         # if contract not found at address, then create new one.
-        self._serialized_data_history_hash = self._data_hash
         # self._account = Account(vm, issuer)
-        self._default_account = None
+        self._caller_account = None
         self.store()
+    
+    @classmethod
+    def load(
+        cls, address: str, issuer: Optional[Account] = None, vm: Optional[VM] = None
+    ):
+        vm = get_vm_with_fallback(vm)
+        account = Account(address, vm=vm)
+        ret = cls(account=account, issuer=issuer, vm=vm)
+        return ret
 
     @classmethod
-    def load(cls, address, issuer: Optional[Account] = None, vm: Optional[VM] = None):
-        return cls(address=address, issuer=issuer, vm=vm)
-
-    @classmethod
-    def create(cls, address, issuer: Account, vm: Optional[VM] = None):
-        return cls(address=address, issuer=issuer, vm=vm)
+    def create(cls, issuer: Account, vm: Optional[VM] = None):
+        vm = get_vm_with_fallback(vm)
+        account = vm.create_account()
+        return cls(account=account, issuer=issuer, vm=vm)
 
     def load_data_and_register_issuer(self):
         data = self._vm.load_contract_data(self)
@@ -417,18 +466,23 @@ class SmartContract:  # anything done to a smart contract shall be stored.
             else:
                 raise Exception("Cannot create new contract without specifying issuer")
 
+            if self._account is not None:
+                self.data.init_account(self._account)
+            else:
+                raise Exception("Cannot create new contract without specifying account")
+
     @property
     def data(self):
         return self._data
 
     def _engage(self, account: Account):
-        if self._default_account is not None:
+        if self._caller_account is not None:
             raise EngageException("Contract already engaged")
         else:
-            self._default_account = account
+            self._caller_account = account
 
     def _disengage(self):
-        self._default_account = None
+        self._caller_account = None
         self.persist_contract_data()
 
     @contextmanager
@@ -452,6 +506,31 @@ class SmartContract:  # anything done to a smart contract shall be stored.
         serialized_data = self.serialize()
         serialized_data_hash = hashlib.sha256(serialized_data.encode()).hexdigest()
         return serialized_data_hash
+
+    def pay_from_caller(self, amount: Number, caller: Optional[Account] = None):
+        caller = self.resolve_caller(caller)
+        caller.pay(amount, recepient=self._account)
+        self._transfer_amount += amount
+
+    def resolve_caller(self, caller: Optional[Account] = None):
+        if caller is None:
+            if self._caller_account is not None:
+                caller = self._caller_account
+            else:
+                raise Exception("Unable to resolve caller account")
+        return caller
+
+    @property
+    def balance(self):
+        return self._account.balance
+
+    @contextmanager
+    def receive(self, amount: Number, account: Optional[Account] = None):
+        try:
+            self.pay_from_caller(amount, account)
+            yield self
+        finally:
+            self._transfer_amount = 0
 
     def store(self):
         serialized_data_hash = self._data_hash
