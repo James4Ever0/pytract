@@ -122,7 +122,7 @@ class ContractProperties(BaseConfig):
 # TODO: recursively resolve and create tuple type hints for languages like vyper
 class ParamType(pydantic.BaseModel):
     type: str
-    name: str = "" # mostly ignored
+    name: str = ""  # mostly ignored
     components: list["ParamType"] = []
 
     # internalType: str
@@ -373,3 +373,29 @@ project_info = abi2api.load_project_info_for_api()"""
     with open(os.path.join(project_path, "__init__.py"), "w+") as f:
         content = """from . import api"""
         f.write(content)
+
+
+# TODO: handle multi-dimentional type specification
+
+# class TypeAnnotation(pydantic.BaseModel):
+#     name: str
+#     length: int
+
+
+# def parse_single_type_annotation(type_annotation: str):
+#     length = 0
+#     if type_annotation.endswith("]"):
+#         type_name, length_text = type_annotation.split("[")
+#         length_text = length_text.strip("]")
+#         length = int(length_text)
+#     else:
+#         type_name = type_annotation
+#     ret = TypeAnnotation(name=type_name, length=length)
+#     return ret
+
+TYPE_PREFIX_TRANSLATION_TABLE_INVERTED = {
+    "tuple": ["tuple"],
+    "int": ["uint", "int"],
+    "bytes": ["bytes"],
+    "str": ['string']
+}
