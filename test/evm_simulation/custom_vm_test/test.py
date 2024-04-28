@@ -4,8 +4,12 @@
 import pytract
 import os
 import shutil
+
 # TODO: setup named account and contracts, accessible by name locally, so each user can lookup their own account/contract database via name without disturbing privacy
 
+class TestContract(pytract.vm.SmartContract):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 def main():
     db_path = os.path.abspath("./db.json")

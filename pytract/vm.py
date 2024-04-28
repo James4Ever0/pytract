@@ -5,7 +5,20 @@ import tinydb
 import pydantic
 import web3
 import beartype
-from typing_extensions import Self, Optional, Literal
+
+try:
+    from typing_extensions import Self
+except:
+    from typing import Self
+try:
+    from typing_extensions import Optional
+except:
+    from typing import Optional
+try:
+    from typing_extensions import Literal
+except:
+    from typing import Literal
+
 from typing import Union
 from contextlib import contextmanager
 import os
@@ -14,8 +27,11 @@ import filelock
 import functools
 import json
 import hashlib
+
 # import dill
 import typing
+
+Number = Union[int, float]
 
 
 # TODO: use tinydb context with filelock to ensure data consistency
@@ -102,7 +118,7 @@ class AccountStaticInfo(pydantic.BaseModel):
 
 
 class AccountVolatileInfo(pydantic.BaseModel):
-    balance: float
+    balance: Number
 
     @pydantic.validator("balance")
     def validate_balance(cls, v):
@@ -142,7 +158,7 @@ class VM:
         ensure_dir(self._contract_data_db_dir)
         ensure_dir(self._contract_data_lock_dir)
 
-    def transfer(self, sender: "Account", receiver: "Account", amount: float):
+    def transfer(self, sender: "Account", receiver: "Account", amount: Number):
         assert amount > 0, "Transfer amount must be positive"
         sender_balance = sender.balance
         sender_new_balance = sender_balance - amount
@@ -153,7 +169,7 @@ class VM:
             self.set_balance(sender, sender_new_balance)
             self.set_balance(receiver, receiver_new_balance)
 
-    def set_balance(self, account: "Account", balance: float):
+    def set_balance(self, account: "Account", balance: Number):
         assert balance >= 0, "Balance must be non-negative"
         doc_id = self.query_for_single_account_document_id(account)
         updated_ids = self._db.update(
@@ -208,7 +224,7 @@ class VM:
             with open(contract_db_filepath, "w+") as f:
                 f.write(data)
 
-    def create_account(self, init_balance: float = 0):
+    def create_account(self, init_balance: Number = 0):
         assert init_balance >= 0, "Initial balance must be non-negative"
         account_static_info = generate_account_static_info()
         # private key
@@ -275,7 +291,7 @@ class Account:
         else:
             raise Exception("Key invalid. Cannot unlock account.")
 
-    def pay(self, amount: int, recepient: Optional[Self] = None):
+    def pay(self, amount: Number, recepient: Optional[Self] = None):
         if self._key is None:
             raise Exception("Account is not unlocked.")
         if recepient is None:
@@ -306,24 +322,43 @@ class Account:
         finally:
             self._disengage()
 
+
 class PersistantDataDict(dict):
     def __init__(self, contract: "SmartContract", data: dict = {}):
         self.contract = contract
+        self.ISSUER_KEY = "_issuer"
+        self.read_only_keys = [self.ISSUER_KEY]
         super().__init__(**data)
+
+    def init_issuer(self, issuer: Account):
+        with self.persist_context() as data_context:
+            data_context[data_context.ISSUER_KEY] = issuer._address
+
     @contextmanager
     def persist_context(self):
         try:
             yield self
         finally:
             self.persist()
-    def __setitem__(self, key, value): # TODO: to handle nested statement like a[0][0] = 0, we need to use a contextmanager approach instead of this.
+
+    def check_key_if_is_readonly(self, key):
+        for it in self.read_only_keys:
+            if key == it:
+                if key in self.keys():
+                    # this is readonly. refuse to set it again.
+                    raise Exception(f"Cannot reset read-only key '{it}'")
+
+    def __setitem__(
+        self, key, value
+    ):  # TODO: to handle nested statement like a[0][0] = 0, we need to use a contextmanager approach instead of this.
+        self.check_key_if_is_readonly(key)
         super().__setitem__(key, value)
         self.persist()
-    
+
     def __delitem__(self, key):
         super().__delitem__(key)
         self.persist()
-    
+
     def persist(self):
         self.contract.store()
 
@@ -339,6 +374,7 @@ class PersistantDataDict(dict):
     #     self.contract.store()
     #     super().__delattr__(name)
 
+
 # ref:
 # https://docs.python.org/3/library/shelve.html
 # https://docs.python.org/3/library/dbm.html
@@ -353,14 +389,33 @@ class SmartContract:  # anything done to a smart contract shall be stored.
         self._address = address
         self._issuer = issuer
         self._vm = get_vm_with_fallback(vm)
-        data = self._vm.load_contract_data(self)
-        self._data = PersistantDataDict(self, data if data is not None else {})
+
+        self.load_data_and_register_issuer()
 
         # if contract not found at address, then create new one.
         self._serialized_data_history_hash = self._data_hash
         # self._account = Account(vm, issuer)
         self._default_account = None
         self.store()
+
+    @classmethod
+    def load(cls, address, issuer: Optional[Account] = None, vm: Optional[VM] = None):
+        return cls(address=address, issuer=issuer, vm=vm)
+
+    @classmethod
+    def create(cls, address, issuer: Account, vm: Optional[VM] = None):
+        return cls(address=address, issuer=issuer, vm=vm)
+
+    def load_data_and_register_issuer(self):
+        data = self._vm.load_contract_data(self)
+        if data is not None:
+            self._data = PersistantDataDict(self, data)
+        else:
+            self._data = PersistantDataDict(self, {})
+            if self._issuer is not None:
+                self.data.init_issuer(self._issuer)
+            else:
+                raise Exception("Cannot create new contract without specifying issuer")
 
     @property
     def data(self):
