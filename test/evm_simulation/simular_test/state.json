@@ -2,9 +2,21 @@
   "source": "Memory",
   "block_num": 0,
   "accounts": {
-    "0x04dca00d0a8a6dcb7cb8ba43219b46603d66e96f": {
+    "0x0000000000000000000000000000000000000000": {
       "nonce": 0,
-      "balance": "0x1",
+      "balance": "0x0",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x04dca00d0a8a6dcb7cb8ba43219b46603d66e960": {
+      "nonce": 1,
+      "balance": "0x9",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x04dca00d0a8a6dcb7cb8ba43219b46603d66e961": {
+      "nonce": 0,
+      "balance": "0xb",
       "code": "0x",
       "storage": {}
     }

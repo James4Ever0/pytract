@@ -1,10 +1,7 @@
 from simular_common import *
 
-with open(STATEFILE_PATH, 'r') as f:
+with open(STATEFILE_PATH, 'r') as f: # working!
     evm = simular.PyEvm.from_snapshot(f.read())
 
-# now check the address
-balance = evm.get_balance(TEST_ACCOUNT_ADDRESS)
-
-print("balance:", balance)
-# balance: 1
+    # now check the address
+    show_balance(evm=evm)
