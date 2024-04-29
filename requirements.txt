@@ -4,6 +4,3 @@ pydantic
 beartype
 tinydb
 filelock
-simular-evm
-simular-eth-stubs
-# dill
