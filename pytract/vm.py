@@ -1,4 +1,5 @@
 # smart contract web3 virtual machine
+from .utils import AtomicTinyDB, generate_address_and_key
 import tinydb
 
 # import abc
@@ -9,7 +10,7 @@ import beartype
 try:
     from typing_extensions import Self
 except:
-    from typing import Self
+    from typing import Self # type: ignore
 try:
     from typing_extensions import Optional
 except:
@@ -23,8 +24,6 @@ from typing import Union
 from contextlib import contextmanager
 import os
 import pathlib
-import filelock
-import functools
 import json
 import hashlib
 import typing_extensions
@@ -34,43 +33,13 @@ import typing
 
 Number = Union[int, float]
 P = typing_extensions.ParamSpec("P")
+R = typing.TypeVar("R")
 
-
-# TODO: use tinydb context with filelock to ensure data consistency
-@contextmanager
-def tinydb_context(db_path: str):
-    prefix, suffix = os.path.split(db_path)
-    db_lockpath = os.path.join(prefix, f".{suffix}.lock")
-    with filelock.FileLock(db_lockpath):
-        with tinydb.TinyDB(db_path) as db:
-            yield db
-
-
-@beartype.beartype
-class AtomicTinyDB:
-    def __init__(self, db_path: str):
-        self._db_context_builder = functools.partial(tinydb_context, db_path)
-
-    def update(self, *args, **kwargs):
-        with self._db_context_builder() as db:
-            return db.update(*args, **kwargs)
-
-    def search(self, *args, **kwargs):
-        with self._db_context_builder() as db:
-            return db.search(*args, **kwargs)
-
-    def get(self, *args, **kwargs):
-        with self._db_context_builder() as db:
-            return db.get(*args, **kwargs)
-
-    def insert(self, *args, **kwargs):
-        with self._db_context_builder() as db:
-            return db.insert(*args, **kwargs)
 
 
 def generate_account_static_info():
-    account = web3.Account.create()
-    ret = AccountStaticInfo(address=account.address, key=account.key.hex())
+    address, key = generate_address_and_key()
+    ret = AccountStaticInfo(address=address, key=key)
     return ret
 
 
@@ -84,15 +53,6 @@ def check_key_validity(address: str, key: str):
         pass
     return ret
 
-
-def check_if_serializable(data) -> bool:
-    serializable = False
-    try:
-        json.dumps(data, ensure_ascii=False)
-        serializable = True
-    except:
-        print("data not serializable")
-    return serializable
 
 
 _default_vm: Optional["VM"] = None
@@ -272,9 +232,9 @@ class VM:
 # account = vm.create_account()
 
 def payable(
-    func: typing.Callable[typing_extensions.Concatenate["typing.Any", P]]
+    func: typing.Callable[typing_extensions.Concatenate["typing.Any", P], R]
 ) -> typing.Callable[
-    typing_extensions.Concatenate["typing.Any", "Account", Number, P]
+    typing_extensions.Concatenate["typing.Any", "Account", Number, P], R
 ]:
     def payable_func(
         self: "SmartContract",
@@ -282,7 +242,7 @@ def payable(
         amount: Number,
         *args: P.args,
         **kwargs: P.kwargs,
-    ):
+    ) -> R:
         with self.engage(caller):
             with self.receive(amount):
                 return func(self, *args, **kwargs)
