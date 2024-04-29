@@ -1,5 +1,6 @@
-from .utils import AtomicKVStore, generate_address_and_key
+from .utils import AtomicKVStore, generate_address_and_key, check_key_validity
 import typing
+
 
 class LockSmith:
     """Create and store Web3 accounts by name"""
@@ -26,9 +27,11 @@ class LockSmith:
         ret = self.import_account(name, address, key)
         return ret
 
-    def import_account(self, name:str, address:str, key:typing.Optional[str] = None):
+    def import_account(self, name: str, address: str, key: typing.Optional[str] = None):
+        if key is not None:
+            check_key_validity(address, key, enforce=True)
         ret = dict(address=address, key=key)
-        self.db.set(name,ret)
+        self.db.set(name, ret)
         return ret
 
     # def new_contract(self, name:str):

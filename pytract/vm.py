@@ -1,16 +1,16 @@
 # smart contract web3 virtual machine
-from .utils import AtomicTinyDB, generate_address_and_key
+from .utils import AtomicTinyDB, generate_address_and_key, check_key_validity
 import tinydb
 
 # import abc
 import pydantic
-import web3
 import beartype
+import filelock
 
 try:
     from typing_extensions import Self
 except:
-    from typing import Self # type: ignore
+    from typing import Self  # type: ignore
 try:
     from typing_extensions import Optional
 except:
@@ -36,23 +36,10 @@ P = typing_extensions.ParamSpec("P")
 R = typing.TypeVar("R")
 
 
-
 def generate_account_static_info():
     address, key = generate_address_and_key()
     ret = AccountStaticInfo(address=address, key=key)
     return ret
-
-
-def check_key_validity(address: str, key: str):
-    ret = False
-    try:
-        account = web3.Account.from_key(key)
-        assert account.address == address, f"Key '{key}' is not for address '{address}'"
-        ret = True
-    except:
-        pass
-    return ret
-
 
 
 _default_vm: Optional["VM"] = None
@@ -231,6 +218,7 @@ class VM:
 # vm.create_contract()
 # account = vm.create_account()
 
+
 def payable(
     func: typing.Callable[typing_extensions.Concatenate["typing.Any", P], R]
 ) -> typing.Callable[
@@ -248,6 +236,7 @@ def payable(
                 return func(self, *args, **kwargs)
 
     return payable_func
+
 
 @beartype.beartype
 class Account:
@@ -399,7 +388,7 @@ class SmartContract:  # anything done to a smart contract shall be stored.
         # self._account = Account(vm, issuer)
         self._caller_account = None
         self.store()
-    
+
     @classmethod
     def load(
         cls, address: str, issuer: Optional[Account] = None, vm: Optional[VM] = None

@@ -10,13 +10,27 @@ from contextlib import contextmanager
 from beartype.vale import Is
 import web3
 
+
 def generate_address_and_key():
     account = web3.Account.create()
-    address=account.address
-    key=account.key.hex()
+    address = account.address
+    key = account.key.hex()
     return address, key
 
-def check_if_serializable(data) -> bool:
+@beartype.beartype
+def check_key_validity(address: str, key: str, enforce: bool = False):
+    ret = False
+    try:
+        account = web3.Account.from_key(key)
+        ret = account.address == address
+    except:
+        pass
+    if enforce:
+        assert ret, f"Key '{key}' is not for address '{address}'"
+    return ret
+
+
+def check_if_serializable(data:object) -> bool:
     serializable = False
     try:
         json.dumps(data, ensure_ascii=False)
@@ -72,7 +86,7 @@ class AtomicTinyDB:
 
 @beartype.beartype
 class AtomicKVStore:
-    def __init__(self, storage_location: str, readonly_keys: list[str]=[]):
+    def __init__(self, storage_location: str, readonly_keys: list[str] = []):
         self.storage_location = storage_location
         self.readonly_keys = readonly_keys
         self.load_data()
