@@ -2,7 +2,7 @@ from setuptools import setup
 import functools
 
 PKG_NAME = "pytract"
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 
 # REQUIREMENTS = [
 #     # "vyper",
